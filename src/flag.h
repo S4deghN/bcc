@@ -55,7 +55,7 @@ extern struct Flag __stop_flags_section;
 
 const char *program_name;
 
-flag(_Bool, help, false, "-h", "--help", "", "Print Help") {
+flag(_Bool, help, 0, "-h", "--help", "", "Print Help") {
     f->stop = 1;
 
     int longest_tab = 0;

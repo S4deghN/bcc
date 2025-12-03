@@ -1,39 +1,33 @@
-#define FLAG_IMPLEMENTATION
-#include "flag.h"
-
 #include <stdio.h>
-#include <stdbool.h>
-#include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <assert.h>
 #include <sys/wait.h>
+#include <errno.h>
 
-flag(bool, flag_E, false, "-E", "", "", "Stop after preprocessing.") {
-    flag_E = true;
-}
-
-flag(bool, flag_S, false, "-S", "", "", "Stop after assembly generation.") {
-    flag_S = true;
-}
-
-flag(bool, flag_C, false, "-C", "", "", "Stop after object generation. Do not link.") {
-    flag_C = true;
-}
-
-flag(char*, source_path, true, "", "", "<source_path>", "Source file to compile") {
-    source_path = *(*argv-1);
-    FILE *file = fopen(source_path, "r");
-    if (file) {
-        fclose(file);
-    } else {
-        f->stop = errno;
-        fprintf(stderr, "ERROR: Can not open file \"%s\": %s: %d\n",
-            source_path, strerror(errno), errno);
+void run_popen(int argc, char *argv[]) {
+    char buff[254];
+    char *p = buff;
+    for (int i = 1; i < argc; ++i) {
+        p = stpcpy(p, argv[i]);
+        p = stpcpy(p, " ");
     }
+
+    int n;
+    FILE *f = popen(buff, "er");
+    while(n = fread(buff, 1, sizeof(buff), f)) {
+        fwrite(buff, 1, n, stdout);
+    }
+
+    int err = pclose(f);
+    if (err == -1) {
+        printf("error: %d\n", err);
+    }
+    exit(err);
 }
 
-void run_pipe(char *argv[]) {
+void run_pipe(int argc, char *argv[]) {
     char buff[254];
 
     int pipefd[2];
@@ -43,7 +37,7 @@ void run_pipe(char *argv[]) {
     if (cpid == 0) {
         close(pipefd[0]); // close unused read end.
         dup2(pipefd[1], STDOUT_FILENO); // redirect stdout to pipe.
-        if (execvp(argv[0], argv)) {
+        if (execvp(argv[1], argv + 1)) {
             perror("fork:");
             exit(1);
         }
@@ -72,21 +66,10 @@ void run_pipe(char *argv[]) {
     }
 }
 
-void preproc_stateg() {
-    run_pipe((char*[]){"cc", "-E", "-P", source_path, NULL});
-}
-
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
-    int stop = flag_parse(&argc, &argv);
-    if (stop) {
-        exit(stop > 0 ? 0 : -stop);
-    }
-
-    preproc_stateg();
-    if (flag_E) {
-        printf("exiting after preproc\n");
-        exit(0);
-    }
+    if (argc < 2) return 1;
+    // run_popen(argc, argv);
+    run_pipe(argc, argv);
 }
+
