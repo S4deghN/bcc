@@ -1,8 +1,8 @@
 CFLAGS := -Wall -Wextra -ggdb
 LDFLAGS :=
 
-bin/ycc: CFLAGS += -pedantic
-bin/ycc: src/main.c | bin/
+bin/bcc: CFLAGS += -pedantic
+bin/bcc: src/main.c src/flag.h | bin/
 	cc $(CFLAGS) -o $@ $(LDFLAGS) $^
 
 bin/:
