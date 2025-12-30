@@ -1,6 +1,7 @@
 #define FLAG_IMPLEMENTATION
 #include "flag.h"
-#include "utils.h"
+#define BASE_IMPLEMENTATION
+#include "base.h"
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -9,22 +10,10 @@
 #include <unistd.h>
 #include <assert.h>
 
-flag(bool, flag_E, false, "-E", "", "", "Stop after preprocessing.")
-{
-    flag_E = true;
-}
-
-flag(bool, flag_S, false, "-S", "", "", "Stop after assembly generation.")
-{
-    flag_S = true;
-}
-
-flag(bool, flag_C, false, "-C", "", "", "Stop after object generation. Do not link.")
-{
-    flag_C = true;
-}
-
-flag(char*, source_path, true, "", "", "<source_path>", "Source file to compile")
+flag_bool(flag_E, .sym1 = "-E", .desc = "Stop after preprocessing.")
+flag_bool(flag_S, .sym1 = "-S", .desc = "Stop after assembly generation.")
+flag_bool(flag_C, .sym1 = "-C", .desc = "Stop after object generation. Do not link.")
+flag(char*, source_path, .required = true, .arg = "<source_path>", .desc = "Source file to compile")
 {
     source_path = flag_shift(*argc, *argv);
     FILE *file = fopen(source_path, "r");
@@ -33,7 +22,7 @@ flag(char*, source_path, true, "", "", "<source_path>", "Source file to compile"
     } else {
         fprintf(stderr, "ERROR: Can not open file \"%s\": %s: %d\n",
             source_path, strerror(errno), errno);
-        flag_exit(errno);
+        exit(errno);
     }
 }
 
@@ -52,10 +41,10 @@ main(int argc, char *argv[])
 
     Buff file_content = {0};
 
-    preproc_stage(source_path, &file_content);
-
+    preproc_stage(source_path, &file_content); // fills the buffer with preprocessed C code.
     if (flag_E) {
         write(STDOUT_FILENO, file_content.data, file_content.count);
         exit(0);
     }
+
 }

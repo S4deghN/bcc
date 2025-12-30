@@ -1,19 +1,19 @@
 #ifndef _FLAG_H
 #define _FLAG_H
 
-#define __funused __attribute__((unused))
+#if !defined(__unused)
+#define __unused __attribute__((unused))
+#endif
 
 #define flag_shift(xs_sz, xs) ((xs_sz)--, *(xs)++)
-
-void flag_exit(int ec);
 
 struct Flag {
     char* sym1;
     char* sym2;
     char* arg;
-    char* des;
-    _Bool is_set;
+    char* desc;
     _Bool required;
+    _Bool is_set;
     void (*handle)(int*, char**[], struct Flag*);
 };
 
@@ -22,22 +22,22 @@ struct Flag {
 // byte steps! But when you define variables of them on a custom section they
 // are put into the section with 32 byte alignment!
 // Solution is to set alignment for variables when defined.
-#define flag(type, name, required, sym1, sym2, arg, des)       \
-    void name##_h(int*, char**[], struct Flag*);     \
-    __attribute__((section ("flags_section")))       \
-    __attribute__((aligned (_Alignof(struct Flag)))) \
-    struct Flag flag_##name = {                      \
-         sym1,                                       \
-         sym2,                                       \
-         arg,                                        \
-         des,                                        \
-         0,                                          \
-         required,                                   \
-         name##_h,                                   \
-    };                                               \
-    type name;                                       \
-    void name##_h (__funused int* argc, __funused char** argv[], \
-        __funused struct Flag *f)
+#define flag(type, name, ...)                                    \
+    void name##_h(int*, char**[], struct Flag*);                 \
+    __attribute__((section ("flags_section")))                   \
+    __attribute__((aligned (_Alignof(struct Flag))))             \
+    struct Flag flag_##name = {                                  \
+        __VA_ARGS__,                                             \
+        .is_set = 0,                                             \
+        .handle = name##_h,                                      \
+    };                                                           \
+    type name;                                                   \
+    void name##_h (__unused int* argc, __unused char** argv[], \
+        __unused struct Flag *f)
+
+#define flag_bool(name, ...) flag(_Bool, name, __VA_ARGS__) { \
+    name = 1; \
+}
 
 #endif // _FLAG_H
 
@@ -53,26 +53,43 @@ extern struct Flag __stop_flags_section;
 
 const char *program_name;
 
-void flag_exit(int ec) {
-    exit(ec);
+size_t flag_strlen(const char *str) {
+    if (!str) return 0;
+    return strlen(str);
 }
 
-flag(_Bool, help, 0, "-h", "--help", "", "Print Help") {
+int flag_strcmp(const char *s1, const char *s2) {
+    if (s1 == s2) return 0;
+    if (!s1) return -1;
+    if (!s2) return 1;
+    return strcmp(s1, s2);
+}
+
+void flag_fprint_flag(FILE *f, struct Flag *l) {
+    char *comma = l->sym2 != NULL ? "," : "";
+    char *space = (l->sym1 != NULL || l->sym2 != NULL) && l->arg != NULL ? " " : "";
+    char *sym1  = l->sym1 ? l->sym1 : "";
+    char *sym2  = l->sym2 ? l->sym2 : "";
+    char *arg   = l->arg ? l->arg : "";
+    fprintf(f, "%s%s%s%s%s", sym1, comma, sym2 , space, arg);
+}
+
+flag(_Bool, help, .sym1 = "-h", .sym2 = "--help", .desc = "Print Help") {
     int longest_tab = 0;
     for(struct Flag *l = flag_list(0); l != flag_list_end(); ++l) {
-        int flag_len = strlen(l->sym1) + strlen(l->sym2) + strlen(l->arg);
+        int flag_len = flag_strlen(l->sym1) + flag_strlen(l->sym2) + flag_strlen(l->arg);
         if (longest_tab < flag_len) {
             longest_tab = flag_len;
         }
     }
 
     for(struct Flag *l = flag_list(0); l != flag_list_end(); ++l) {
-        int tab = longest_tab - (1 + strlen(l->sym1) + strlen(l->sym2) + strlen(l->arg));
-        char *comma = l->sym2[0] != '\0' ? "," : "";
-        printf("%s%s%s %s%*c\t%s\n", l->sym1, comma, l->sym2, l->arg, tab, ' ', l->des);
+        int tab = longest_tab - (1 + flag_strlen(l->sym1) + flag_strlen(l->sym2) + flag_strlen(l->arg));
+        flag_fprint_flag(stdout, l);
+        printf("%*c\t%s\n", tab, ' ', l->desc);
     }
 
-    flag_exit(0);
+    exit(0);
 }
 
 int flag_parse(int *argc, char **argv[]) {
@@ -81,8 +98,8 @@ int flag_parse(int *argc, char **argv[]) {
         const char* token = flag_shift(*argc, *argv);
         struct Flag *l;
         for(l = flag_list(0); l != flag_list_end(); ++l) {
-            if ((strcmp(l->sym1, token) == 0 || strcmp(l->sym2, token) == 0) ||
-                (token[0] != '-' && (l->sym1[0] == '\0' && l->sym2[0] == '\0')))
+            if ((flag_strcmp(l->sym1, token) == 0 || flag_strcmp(l->sym2, token) == 0) ||
+                (token[0] != '-' && (l->sym1 == NULL && l->sym2 == NULL)))
             {
                 // In case of an empty symbol restore the cosumed arg
                 if (token[0] != '-') { ++(*argc); --(*argv); }
@@ -97,13 +114,15 @@ int flag_parse(int *argc, char **argv[]) {
         }
     }
 
+    _Bool some_was_not_set = 0;
     for(struct Flag *l = flag_list(0); l != flag_list_end(); ++l) {
         if (l->required && !l->is_set) {
-            char *comma = l->sym2[0] != '\0' ? "," : "";
-            fprintf(stderr, "%s%s%s %s is required\n", l->sym1, comma, l->sym2, l->arg);
-            return 1;
+            flag_fprint_flag(stderr, l);
+            fprintf(stderr, " is required\n");
+            some_was_not_set = 1;
         }
     }
+    if (some_was_not_set) return 1;
 
     return 0;
 }

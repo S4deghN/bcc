@@ -1,10 +1,8 @@
-#ifndef UTILS_H
-#define UTILS_H
+#ifndef SRC_BASE_H
+#define SRC_BASE_H
 
 #include <stdlib.h>
 #include <assert.h>
-#include <unistd.h>
-#include <sys/wait.h>
 
 #define DA_INIT_CAP 256
 
@@ -30,42 +28,49 @@
     (list)->data[(list)->count++] = item; \
 } while(0);
 
+#define resize(list, size) do { \
+    reserve(list, size);        \
+    (list)->count = size;       \
+} while(0);
+
 typedef struct {
     char *data;
     size_t count;
     size_t capacity;
 } Buff;
 
-// TODO: Maybe use libc's `popen` and friends for portability.
+int run_cmd(char *argv[], Buff *out_buff);
+
+#endif
+
+#ifdef BASE_IMPLEMENTATION
+
 int run_cmd(char *argv[], Buff *out_buff) {
-    int pipefd[2];
-    assert(pipe(pipefd) != -1);
-
-    pid_t cpid = fork();
-    if (cpid == 0) {
-        close(pipefd[0]); // close unused read end.
-        dup2(pipefd[1], STDOUT_FILENO); // redirect stdout to pipe.
-        if (execvp(argv[0], argv)) {
-            perror("fork: ");
-            exit(1);
-        }
+    char buff[1024];
+    char *p = buff;
+    for (int i = 0; argv[i] != NULL; ++i) {
+        p = stpcpy(p, argv[i]);
+        p = stpcpy(p, " ");
     }
-    assert(cpid != -1);
-
-    close(pipefd[1]); // close unused write end.
 
     int n;
-    char buff[1024];
-    while((n = read(pipefd[0], buff, sizeof buff))) {
-        append_many(out_buff, buff, n)
-    }
-
-    int wstatus;
-    if (waitpid(cpid, &wstatus, 0) == -1) {
-        // TODO: handle based on how we exited. read `waitpid(2)`.
+    FILE *f = popen(buff, "r");
+    if (!f) {
+        perror("popen: ");
         return -1;
     }
+
+    while((n = fread(buff, 1, sizeof(buff), f))) {
+        append_many(out_buff, buff, n);
+    }
+
+    int err = pclose(f);
+    if (err == -1) {
+        perror("pclose: ");
+    }
+
     return 0;
 }
 
 #endif
+
