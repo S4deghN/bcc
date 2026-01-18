@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#define array_len(a) (sizeof(a)/sizeof(a[0]))
+
 #define DA_INIT_CAP 256
 
 #define reserve(list, minimum_cap) do {                                             \

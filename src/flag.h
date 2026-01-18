@@ -36,6 +36,7 @@ struct Flag {
         __unused struct Flag *f)
 
 #define flag_bool(name, ...) flag(_Bool, name, __VA_ARGS__) { \
+    f->is_set = 1;\
     name = 1; \
 }
 

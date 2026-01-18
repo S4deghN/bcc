@@ -2,6 +2,8 @@
 #include "flag.h"
 #define BASE_IMPLEMENTATION
 #include "base.h"
+#define LEXER_IMPLEMENTATION
+#include "lexer.h"
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -9,6 +11,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <assert.h>
+#include <ctype.h>
 
 flag_bool(flag_E, .sym1 = "-E", .desc = "Stop after preprocessing.")
 flag_bool(flag_S, .sym1 = "-S", .desc = "Stop after assembly generation.")
@@ -39,12 +42,22 @@ main(int argc, char *argv[])
         exit(1);
     }
 
-    Buff file_content = {0};
+    Buff file = {0};
 
-    preproc_stage(source_path, &file_content); // fills the buffer with preprocessed C code.
+    preproc_stage(source_path, &file); // fills the buffer with preprocessed C code.
     if (flag_E) {
-        write(STDOUT_FILENO, file_content.data, file_content.count);
+        write(STDOUT_FILENO, file.data, file.count);
         exit(0);
+    }
+
+    Lexer l;
+    lexer_init(&l, file.data, file.count);
+
+    for (Token tok = lexer_next_token(&l); tok.type != TOKEN_EOF; tok = lexer_next_token(&l)) {
+        if (tok.type == TOKEN_ERR) {
+            lexer_report_error(&l, tok, source_path);
+        }
+        printf("tok: type = %d, str = %.*s\n", tok.type, (int)tok.len, tok.str);
     }
 
 }
